@@ -140,12 +140,14 @@ julia> Symbol(apple)
 ```
 """
 macro menum(T::Union{Symbol,Expr}, syms...)
+    local modname::Symbol
     if isa(T, Expr) && T.head === :tuple
         length(T.args) == 2 || throw(ArgumentError("If first argument is a Tuple, it must have two elements"))
         modname = T.args[1]
         T = T.args[2]
     else
-        modname = Symbol(T, :mod)
+#        modname = Symbol(T, :mod)
+        modname = :nothing
     end
     basetype = Int32
     typename = T
@@ -209,11 +211,8 @@ macro menum(T::Union{Symbol,Expr}, syms...)
         i += oneunit(i)
     end
     blk = quote
-        module $(esc(modname))
-        end
         # enum definition
         Base.@__doc__(primitive type $(esc(typename)) <: MEnum{$(basetype)} $(sizeof(basetype) * 8) end)
-        MEnums.getmodule(::Type{$(esc(typename))}) = $(esc(modname))
         function $(esc(typename))(x::Integer)
             #            $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x) GJL
             (x <= typemax($basetype) && x >= typemin($basetype)) || enum_argument_error($(Expr(:quote, typename)), x)
@@ -222,6 +221,13 @@ macro menum(T::Union{Symbol,Expr}, syms...)
         MEnums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
     end
     if isa(typename, Symbol)
+        if modname !== :nothing
+            push!(blk.args, :(
+                      module $(esc(modname))
+                      end))
+        end
+        push!(blk.args,
+              :(MEnums.getmodule(::Type{$(esc(typename))}) = $(esc(modname))))
         push!(blk.args, :(MEnums._bind_vars($(esc(modname)), $(esc(typename)))))
     end
     push!(blk.args, :nothing)
@@ -232,22 +238,32 @@ end
 function _bind_vars(mod, etype)
     for (i, sym) in namemap(etype)
         na = etype(i)
-        mod.eval(:(const $sym = $na))
-        mod.eval(:(export $sym))
+        if mod !== nothing
+            mod.eval(:(const $sym = $na))
+            mod.eval(:(export $sym))
+        else
+            eval(:(const $sym = $na))
+            eval(:(export $sym))
+        end
     end
 end
 
 function add!(a, syms...)
     nmap = MEnums.namemap(a)
-    m = getmodule(a)
+    _module = getmodule(a)
     nextnum = length(a) == 0 ? 0 : maximum(keys(nmap)) + 1
     local na
     for sym in syms
         sym in values(nmap) && throw(ArgumentError("Key $sym already defined in $a."))
         na = a(nextnum)
         nmap[nextnum] = sym
-        m.eval(:(const $sym = $na))
-        m.eval(:(export $sym))
+        for code in (:(const $sym = $na), :(export $sym))
+            if _module !== nothing
+                _module.eval(code)
+            else
+                eval(code)
+            end
+        end
         nextnum += 1
     end
     return na
