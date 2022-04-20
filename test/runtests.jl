@@ -1,6 +1,6 @@
-using ExEnum
+using ExEnums
 using Test
 
-@testset "ExEnum.jl" begin
+@testset "ExEnums.jl" begin
     # Write your tests here.
 end
