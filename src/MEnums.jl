@@ -1,39 +1,45 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
-
-module Enums
+module MEnums
 
 import Core.Intrinsics.bitcast
-export Enum, @enum
+
+export MEnum, @menum
 
 function namemap end
+function getmodule end
 
 """
-    Enum{T<:Integer}
+    MEnum{T<:Integer}
 
-The abstract supertype of all enumerated types defined with [`@enum`](@ref).
+The abstract supertype of all enumerated types defined with [`@menum`](@ref).
 """
-abstract type Enum{T<:Integer} end
+abstract type MEnum{T<:Integer} end
 
-basetype(::Type{<:Enum{T}}) where {T<:Integer} = T
+basetype(::Type{<:MEnum{T}}) where {T<:Integer} = T
 
-(::Type{T})(x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
-Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)
-Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
-Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, basetype(T)))
+(::Type{T})(x::MEnum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
+Base.cconvert(::Type{T}, x::MEnum{T2}) where {T<:Integer,T2<:Integer} = T(x)
+Base.write(io::IO, x::MEnum{T}) where {T<:Integer} = write(io, T(x))
+Base.read(io::IO, ::Type{T}) where {T<:MEnum} = T(read(io, basetype(T)))
 
-Base.isless(x::T, y::T) where {T<:Enum} = isless(basetype(T)(x), basetype(T)(y))
+Base.isless(x::T, y::T) where {T<:MEnum} = isless(basetype(T)(x), basetype(T)(y))
 
-Base.Symbol(x::Enum) = namemap(typeof(x))[Integer(x)]::Symbol
+Base.Symbol(x::MEnum)::Symbol = _symbol(x)
 
-function _symbol(x::Enum)
+# GJL
+Base.length(t::Type{<:MEnum}) = length(namemap(t))
+Base.typemin(t::Type{<:MEnum}) = minimum(keys(namemap(t)))
+Base.typemax(t::Type{<:MEnum}) = maximum(keys(namemap(t)))
+Base.instances(t::Type{<:MEnum}) = (Any[t(v) for v in keys(namemap(t))]...,)
+
+function _symbol(x::MEnum)
     names = namemap(typeof(x))
     x = Integer(x)
     get(() -> Symbol("<invalid #$x>"), names, x)::Symbol
 end
 
-Base.print(io::IO, x::Enum) = print(io, _symbol(x))
+Base.print(io::IO, x::MEnum) = print(io, _symbol(x))
 
-function Base.show(io::IO, x::Enum)
+function Base.show(io::IO, x::MEnum)
     sym = _symbol(x)
     if !(get(io, :compact, false)::Bool)
         from = get(io, :module, Main)
@@ -46,16 +52,16 @@ function Base.show(io::IO, x::Enum)
     print(io, sym)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", x::Enum)
+function Base.show(io::IO, ::MIME"text/plain", x::MEnum)
     print(io, x, "::")
     show(IOContext(io, :compact => true), typeof(x))
     print(io, " = ")
     show(io, Integer(x))
 end
 
-function Base.show(io::IO, m::MIME"text/plain", t::Type{<:Enum})
+function Base.show(io::IO, m::MIME"text/plain", t::Type{<:MEnum})
     if isconcretetype(t)
-        print(io, "Enum ")
+        print(io, "MEnum ")
         Base.show_datatype(io, t)
         print(io, ":")
         for x in instances(t)
@@ -79,21 +85,21 @@ function membershiptest(expr, values)
     end
 end
 
-# give Enum types scalar behavior in broadcasting
-Base.broadcastable(x::Enum) = Ref(x)
+# give MEnum types scalar behavior in broadcasting
+Base.broadcastable(x::MEnum) = Ref(x)
 
-@noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
+@noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for MEnum $(typename): $x")))
 
 """
-    @enum EnumName[::BaseType] value1[=x] value2[=y]
+    @menum MEnumName[::BaseType] value1[=x] value2[=y]
 
-Create an `Enum{BaseType}` subtype with name `EnumName` and enum member values of
+Create an `MEnum{BaseType}` subtype with name `MEnumName` and enum member values of
 `value1` and `value2` with optional assigned values of `x` and `y`, respectively.
-`EnumName` can be used just like other types and enum member values as regular values, such as
+`MEnumName` can be used just like other types and enum member values as regular values, such as
 
 # Examples
 ```jldoctest fruitenum
-julia> @enum Fruit apple=1 orange=2 kiwi=3
+julia> @menum Fruit apple=1 orange=2 kiwi=3
 
 julia> f(x::Fruit) = "I'm a Fruit with value: \$(Int(x))"
 f (generic function with 1 method)
@@ -108,7 +114,7 @@ apple::Fruit = 1
 Values can also be specified inside a `begin` block, e.g.
 
 ```julia
-@enum EnumName begin
+@menum MEnumName begin
     value1
     value2
 end
@@ -133,9 +139,13 @@ julia> Symbol(apple)
 :apple
 ```
 """
-macro enum(T::Union{Symbol,Expr}, syms...)
-    if isempty(syms)
-        throw(ArgumentError("no arguments given for Enum $T"))
+macro menum(T::Union{Symbol,Expr}, syms...)
+    if isa(T, Expr) && T.head === :tuple
+        length(T.args) == 2 || throw(ArgumentError("If first argument is a Tuple, it must have two elements"))
+        modname = T.args[1]
+        T = T.args[2]
+    else
+        modname = Symbol(T, :mod)
     end
     basetype = Int32
     typename = T
@@ -143,7 +153,7 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         typename = T.args[1]
         basetype = Core.eval(__module__, T.args[2])
         if !isa(basetype, DataType) || !(basetype <: Integer) || !isbitstype(basetype)
-            throw(ArgumentError("invalid base type for Enum $typename, $T=::$basetype; base type must be an integer primitive type"))
+            throw(ArgumentError("invalid base type for MEnum $typename, $T=::$basetype; base type must be an integer primitive type"))
         end
     elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
@@ -162,32 +172,32 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         s isa LineNumberNode && continue
         if isa(s, Symbol)
             if i == typemin(basetype) && !isempty(values)
-                throw(ArgumentError("overflow in value \"$s\" of Enum $typename"))
+                throw(ArgumentError("overflow in value \"$s\" of MEnum $typename"))
             end
         elseif isa(s, Expr) &&
                (s.head === :(=) || s.head === :kw) &&
                length(s.args) == 2 && isa(s.args[1], Symbol)
             i = Core.eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
             if !isa(i, Integer)
-                throw(ArgumentError("invalid value for Enum $typename, $s; values must be integers"))
+                throw(ArgumentError("invalid value for MEnum $typename, $s; values must be integers"))
             end
             i = convert(basetype, i)
             s = s.args[1]
             hasexpr = true
         else
-            throw(ArgumentError(string("invalid argument for Enum ", typename, ": ", s)))
+            throw(ArgumentError(string("invalid argument for MEnum ", typename, ": ", s)))
         end
         s = s::Symbol
         if !Base.isidentifier(s)
-            throw(ArgumentError("invalid name for Enum $typename; \"$s\" is not a valid identifier"))
+            throw(ArgumentError("invalid name for MEnum $typename; \"$s\" is not a valid identifier"))
         end
         if hasexpr && haskey(namemap, i)
-            throw(ArgumentError("both $s and $(namemap[i]) have value $i in Enum $typename; values must be unique"))
+            throw(ArgumentError("both $s and $(namemap[i]) have value $i in MEnum $typename; values must be unique"))
         end
         namemap[i] = s
         push!(values, i)
         if s in seen
-            throw(ArgumentError("name \"$s\" in Enum $typename is not unique"))
+            throw(ArgumentError("name \"$s\" in MEnum $typename is not unique"))
         end
         push!(seen, s)
         if length(values) == 1
@@ -199,27 +209,53 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         i += oneunit(i)
     end
     blk = quote
+        module $(esc(modname))
+        end
         # enum definition
-        Base.@__doc__(primitive type $(esc(typename)) <: Enum{$(basetype)} $(sizeof(basetype) * 8) end)
+        Base.@__doc__(primitive type $(esc(typename)) <: MEnum{$(basetype)} $(sizeof(basetype) * 8) end)
+        MEnums.getmodule(::Type{$(esc(typename))}) = $(esc(modname))
         function $(esc(typename))(x::Integer)
-            $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
+            #            $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x) GJL
+            (x <= typemax($basetype) && x >= typemin($basetype)) || enum_argument_error($(Expr(:quote, typename)), x)
             return bitcast($(esc(typename)), convert($(basetype), x))
         end
-        Enums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
-        Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
-        Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
-        let insts = (Any[ $(esc(typename))(v) for v in $values ]...,)
-            Base.instances(::Type{$(esc(typename))}) = insts
-        end
+        MEnums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
     end
     if isa(typename, Symbol)
-        for (i, sym) in namemap
-            push!(blk.args, :(const $(esc(sym)) = $(esc(typename))($i)))
-        end
+        push!(blk.args, :(MEnums._bind_vars($(esc(modname)), $(esc(typename)))))
     end
     push!(blk.args, :nothing)
     blk.head = :toplevel
     return blk
 end
 
-end # module
+function _bind_vars(mod, etype)
+    for (i, sym) in namemap(etype)
+        na = etype(i)
+        mod.eval(:(const $sym = $na))
+        mod.eval(:(export $sym))
+    end
+end
+
+function add!(a, syms...)
+    nmap = MEnums.namemap(a)
+    m = getmodule(a)
+    nextnum = length(a) == 0 ? 0 : maximum(keys(nmap)) + 1
+    local na
+    for sym in syms
+        sym in values(nmap) && throw(ArgumentError("Key $sym already defined in $a."))
+        na = a(nextnum)
+        nmap[nextnum] = sym
+        m.eval(:(const $sym = $na))
+        m.eval(:(export $sym))
+        nextnum += 1
+    end
+    return na
+end
+
+macro add(a, syms...)
+    qsyms = (QuoteNode(sym) for sym in syms)
+    :(MEnums.add!($(esc(a)), $(qsyms...)))
+end
+
+end # module MEnums
