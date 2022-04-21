@@ -2,7 +2,7 @@ module MEnums
 
 import Core.Intrinsics.bitcast
 
-export MEnum, @menum
+export MEnum, @menum, add!, @add
 
 function namemap end
 function getmodule end
@@ -25,11 +25,10 @@ Base.isless(x::T, y::T) where {T<:MEnum} = isless(basetype(T)(x), basetype(T)(y)
 
 Base.Symbol(x::MEnum)::Symbol = _symbol(x)
 
-# GJL
 Base.length(t::Type{<:MEnum}) = length(namemap(t))
 Base.typemin(t::Type{<:MEnum}) = minimum(keys(namemap(t)))
 Base.typemax(t::Type{<:MEnum}) = maximum(keys(namemap(t)))
-Base.instances(t::Type{<:MEnum}) = (Any[t(v) for v in keys(namemap(t))]...,)
+Base.instances(t::Type{<:MEnum}) = (sort!(Any[t(v) for v in keys(namemap(t))])...,)
 
 function _symbol(x::MEnum)
     names = namemap(typeof(x))
@@ -90,6 +89,30 @@ Base.broadcastable(x::MEnum) = Ref(x)
 
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for MEnum $(typename): $x")))
 
+
+function _sym_and_number(typename, _module, basetype, s)
+    s isa LineNumberNode && return (nothing, nothing)
+    if isa(s, Symbol)
+        i = nothing
+    elseif isa(s, Expr) &&
+        (s.head === :(=) || s.head === :kw) &&
+        length(s.args) == 2 && isa(s.args[1], Symbol)
+        i = Core.eval(_module, s.args[2]) # allow exprs, e.g. uint128"1"
+        if !isa(i, Integer)
+            throw(ArgumentError("invalid value for MEnum $typename, $s; values must be integers"))
+        end
+        i = convert(basetype, i)
+        s = s.args[1]
+    else
+        throw(ArgumentError(string("invalid argument for MEnum ", typename, ": ", s)))
+    end
+    if !Base.isidentifier(s)
+        throw(ArgumentError("invalid name for MEnum $typename; \"$s\" is not a valid identifier"))
+    end
+    return (s, i)
+end
+
+
 """
     @menum MEnumName[::BaseType] value1[=x] value2[=y]
 
@@ -140,16 +163,15 @@ julia> Symbol(apple)
 ```
 """
 macro menum(T::Union{Symbol,Expr}, syms...)
-    local modname::Symbol
-    if isa(T, Expr) && T.head === :tuple
+    local modname
+    if isa(T, Expr) && T.head === :tuple # (modulename, menumname)
         length(T.args) == 2 || throw(ArgumentError("If first argument is a Tuple, it must have two elements"))
         modname = T.args[1]
         T = T.args[2]
     else
-#        modname = Symbol(T, :mod)
         modname = :nothing
     end
-    basetype = Int32
+    basetype = Int32 # default
     typename = T
     if isa(T, Expr) && T.head === :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
         typename = T.args[1]
@@ -171,28 +193,16 @@ macro menum(T::Union{Symbol,Expr}, syms...)
         syms = syms[1].args
     end
     for s in syms
-        s isa LineNumberNode && continue
-        if isa(s, Symbol)
-            if i == typemin(basetype) && !isempty(values)
-                throw(ArgumentError("overflow in value \"$s\" of MEnum $typename"))
-            end
-        elseif isa(s, Expr) &&
-               (s.head === :(=) || s.head === :kw) &&
-               length(s.args) == 2 && isa(s.args[1], Symbol)
-            i = Core.eval(__module__, s.args[2]) # allow exprs, e.g. uint128"1"
-            if !isa(i, Integer)
-                throw(ArgumentError("invalid value for MEnum $typename, $s; values must be integers"))
-            end
-            i = convert(basetype, i)
-            s = s.args[1]
+        (s, _i) = _sym_and_number(typename, __module__, basetype, s)
+        s === nothing && continue
+        if _i === nothing && i == typemin(basetype) && !isempty(values)
+            throw(ArgumentError("overflow in value \"$s\" of MEnum $typename"))
+        end
+        if _i !== nothing
             hasexpr = true
-        else
-            throw(ArgumentError(string("invalid argument for MEnum ", typename, ": ", s)))
+            i = _i
         end
         s = s::Symbol
-        if !Base.isidentifier(s)
-            throw(ArgumentError("invalid name for MEnum $typename; \"$s\" is not a valid identifier"))
-        end
         if hasexpr && haskey(namemap, i)
             throw(ArgumentError("both $s and $(namemap[i]) have value $i in MEnum $typename; values must be unique"))
         end
@@ -214,56 +224,50 @@ macro menum(T::Union{Symbol,Expr}, syms...)
         # enum definition
         Base.@__doc__(primitive type $(esc(typename)) <: MEnum{$(basetype)} $(sizeof(basetype) * 8) end)
         function $(esc(typename))(x::Integer)
-            #            $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x) GJL
-            (x <= typemax($basetype) && x >= typemin($basetype)) || enum_argument_error($(Expr(:quote, typename)), x)
+            if x > typemax($basetype) || x < typemin($basetype)
+                enum_argument_error($(Expr(:quote, typename)), x)
+            end
             return bitcast($(esc(typename)), convert($(basetype), x))
         end
         MEnums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
     end
     if isa(typename, Symbol)
         if modname !== :nothing
-            push!(blk.args, :(
-                      module $(esc(modname))
-                      end))
+            push!(blk.args, :(module $(esc(modname)); end))
+        else
+            modname = __module__
         end
         push!(blk.args,
               :(MEnums.getmodule(::Type{$(esc(typename))}) = $(esc(modname))))
-        push!(blk.args, :(MEnums._bind_vars($(esc(modname)), $(esc(typename)))))
+        push!(blk.args, :(MEnums._bind_vars($(esc(typename)))))
     end
     push!(blk.args, :nothing)
     blk.head = :toplevel
     return blk
 end
 
-function _bind_vars(mod, etype)
+function _bind_vars(etype)
     for (i, sym) in namemap(etype)
-        na = etype(i)
-        if mod !== nothing
-            mod.eval(:(const $sym = $na))
-            mod.eval(:(export $sym))
-        else
-            eval(:(const $sym = $na))
-            eval(:(export $sym))
-        end
+        _bind_var(getmodule(etype), sym, etype(i))
     end
 end
 
+_bind_var(mod, sym, instance) = mod.eval(:(const $sym = $instance; export $sym))
+
 function add!(a, syms...)
     nmap = MEnums.namemap(a)
-    _module = getmodule(a)
     nextnum = length(a) == 0 ? 0 : maximum(keys(nmap)) + 1
     local na
+    _module = getmodule(a)
     for sym in syms
+        (sym, _i) = _sym_and_number(Symbol(a), _module, basetype(a), sym)
         sym in values(nmap) && throw(ArgumentError("Key $sym already defined in $a."))
+        if _i !== nothing
+            nextnum = _i
+        end
         na = a(nextnum)
         nmap[nextnum] = sym
-        for code in (:(const $sym = $na), :(export $sym))
-            if _module !== nothing
-                _module.eval(code)
-            else
-                eval(code)
-            end
-        end
+        _bind_var(_module, sym, na)
         nextnum += 1
     end
     return na
