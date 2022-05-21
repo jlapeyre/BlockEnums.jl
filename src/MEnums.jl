@@ -16,6 +16,7 @@ abstract type MEnum{T<:Integer} end
 
 basetype(::Type{<:MEnum{T}}) where {T<:Integer} = T
 
+val(x::MEnum{T}) where T = bitcast(T, x)
 (::Type{T})(x::MEnum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
 Base.cconvert(::Type{T}, x::MEnum{T2}) where {T<:Integer,T2<:Integer} = T(x)
 Base.write(io::IO, x::MEnum{T}) where {T<:Integer} = write(io, T(x))
