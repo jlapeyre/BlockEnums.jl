@@ -4,8 +4,12 @@
 [![Coverage](https://codecov.io/gh/jlapeyre/MEnums.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/jlapeyre/MEnums.jl)
 
 
-MEnums is like the built-in Enums. The main difference is that enumerated types are mutable
-in the sense that members may be added after the type is created.
+MEnums is like the built-in Enums. The main differences are
+
+* Enumerated types are mutable in the sense that instances may be added after the type is created.
+* The enumeration may be partitioned into blocks of values. For example `@addinblock A 2 x` would add
+the instance `x` to type `A` in the second block of indices.
+
 
 ```julia
 julia> using MEnums
@@ -26,3 +30,16 @@ apple = 0
 pear = 2
 banana = 1
 ```
+
+### Methods for functions in `Base`
+
+Methods for the following functions in `Base` are defined and follow the established semantics.
+* `cconvert`
+* `write`, converts to the underlying bitstype before writing.
+* `read` , reads a value from the bitstype and converts to the `MEnum`
+* `isless`
+* `Symbol`
+* `length`
+* `typemin`, `typemax` These are the min and max of values with names bound to them.
+* `instances`
+* `print`

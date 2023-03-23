@@ -2,10 +2,79 @@ module MEnums
 
 import Core.Intrinsics.bitcast
 
-export MEnum, @menum, add!, @add
+export MEnum, @menum, add!, @add, blocklength, setblocklength!, getmodule, namemap,
+    numblocks, addblocks!, add_in_block!, maxvalind, @addinblock,
+    blockindex, basetype
 
+"""
+    namemap(::Type{<:MEnum})
+
+Return the `Dict` mapping all values to name symbols.
+Perhaps this should not be advertized or exposed.
+"""
 function namemap end
+
+"""
+    getmodule(t::Type{<:MEnum})
+
+Get the module in which `t` is defined.
+"""
 function getmodule end
+
+"""
+    blocklength(t::Type{<:MEnum})
+
+Get the length of blocks that the range of values of
+`t` is partitioned into.
+"""
+function blocklength end
+
+"""
+    blockindex(v::MEnum)
+
+Get the index of the block of values `v` belongs to.
+"""
+function blockindex end
+
+"""
+    setblocklength!(t::Type{<:MEnum}, block_length)
+
+Set the length of each block in the partition of the values of `t`. This
+can only be called once.  In order to use the blocks you must first set up
+bookkeeping by calling `addblocks!`.  These blocks are called "active".
+"""
+function setblocklength! end
+
+"""
+    numblocks(t::Type{<:MEnum{T}}) where T <: Integer
+
+Return the number of blocks for which bookkeeping has been set up. The
+set of values of `t` is the nonzero values of `T`, which is typically very large. Bookkeeping of
+blocks requires storage. So you can only set up some of the blocks for use.
+"""
+function numblocks end
+
+"""
+    addblocks!(t::Type{<:MEnum}), nblocks::Integer)
+
+Add and initialize `nblocks` blocks to the bookkeeping
+for `t`. The number of active blocks for the type
+is returned.
+"""
+function addblocks! end
+
+
+"""
+    maxvalind(t::Type{<:MEnum}, block_num::Integer)
+
+Return the largest index for which a name has been assigned in the
+`block_num`th block `t`. This number is constrained to be within
+the values in the block.
+"""
+function maxvalind end
+
+function _incrmaxvalind! end
+
 
 """
     MEnum{T<:Integer}
@@ -14,9 +83,23 @@ The abstract supertype of all enumerated types defined with [`@menum`](@ref).
 """
 abstract type MEnum{T<:Integer} end
 
+"""
+    basetype(V::Type{<:MEnum{T}})
+
+Return `T`, which is the bitstype whose values are bitcast to
+the type `V`.
+This is the type of the value returned by `Integer(x::V)`.
+The type is in a sense the underlying type of `V`.
+"""
 basetype(::Type{<:MEnum{T}}) where {T<:Integer} = T
 
+"""
+    val(x::MEnum{T})
+
+Return `x` bitcast to type `T`.
+"""
 val(x::MEnum{T}) where T = bitcast(T, x)
+
 (::Type{T})(x::MEnum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
 Base.cconvert(::Type{T}, x::MEnum{T2}) where {T<:Integer,T2<:Integer} = T(x)
 Base.write(io::IO, x::MEnum{T}) where {T<:Integer} = write(io, T(x))
@@ -29,6 +112,12 @@ Base.Symbol(x::MEnum)::Symbol = _symbol(x)
 Base.length(t::Type{<:MEnum}) = length(namemap(t))
 Base.typemin(t::Type{<:MEnum}) = minimum(keys(namemap(t)))
 Base.typemax(t::Type{<:MEnum}) = maximum(keys(namemap(t)))
+
+"""
+    instances(t::Type{<:MEnum})
+
+Return a `Tuple` of all of the named values of `t`.
+"""
 Base.instances(t::Type{<:MEnum}) = (sort!(Any[t(v) for v in keys(namemap(t))])...,)
 
 function _symbol(x::MEnum)
@@ -73,37 +162,42 @@ function Base.show(io::IO, m::MIME"text/plain", t::Type{<:MEnum})
     end
 end
 
+# Since we don't guarantee continguous values of instances, this does not work
+# It is taken from the code for Enum
 # generate code to test whether expr is in the given set of values
-function membershiptest(expr, values)
-    lo, hi = extrema(values)
-    if length(values) == hi - lo + 1
-        :($lo <= $expr <= $hi)
-    elseif length(values) < 20
-        foldl((x1,x2)->:($x1 || ($expr == $x2)), values[2:end]; init=:($expr == $(values[1])))
-    else
-        :($expr in $(Set(values)))
-    end
-end
+# function membershiptest(expr, values)
+#     lo, hi = extrema(values)
+#     if length(values) == hi - lo + 1
+#         :($lo <= $expr <= $hi)
+#     elseif length(values) < 20
+#         foldl((x1,x2)->:($x1 || ($expr == $x2)), values[2:end]; init=:($expr == $(values[1])))
+#     else
+#         :($expr in $(Set(values)))
+#     end
+# end
 
 # give MEnum types scalar behavior in broadcasting
 Base.broadcastable(x::MEnum) = Ref(x)
 
 @noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for MEnum $(typename): $x")))
 
-
+# Following values of `s` and what is returned
+# `syname` returns (:syname, nothing)
+# `syname = 3` returns `(:syname, 3)`
+# `s` a LineNumberNode returns `(nothing, nothing)`
 function _sym_and_number(typename, _module, basetype, s)
     s isa LineNumberNode && return (nothing, nothing)
     if isa(s, Symbol)
         i = nothing
-    elseif isa(s, Expr) &&
-        (s.head === :(=) || s.head === :kw) &&
+    elseif isa(s, Expr) &&  # For example `a = 1`
+        (s.head === :(=) || s.head === :kw) && # IIRC may be :(=) or :kw depending on Julia version
         length(s.args) == 2 && isa(s.args[1], Symbol)
         i = Core.eval(_module, s.args[2]) # allow exprs, e.g. uint128"1"
         if !isa(i, Integer)
             throw(ArgumentError("invalid value for MEnum $typename, $s; values must be integers"))
         end
         i = convert(basetype, i)
-        s = s.args[1]
+        s = s.args[1] # Set `s` to just the symbol
     else
         throw(ArgumentError(string("invalid argument for MEnum ", typename, ": ", s)))
     end
@@ -111,6 +205,13 @@ function _sym_and_number(typename, _module, basetype, s)
         throw(ArgumentError("invalid name for MEnum $typename; \"$s\" is not a valid identifier"))
     end
     return (s, i)
+end
+
+function _check_begin_block(syms)
+    if length(syms) == 1 && syms[1] isa Expr && syms[1].head === :block
+        syms = syms[1].args
+    end
+    return syms
 end
 
 
@@ -167,12 +268,12 @@ macro menum(T::Union{Symbol,Expr}, syms...)
     local modname
     if isa(T, Expr) && T.head === :tuple # (modulename, menumname)
         length(T.args) == 2 || throw(ArgumentError("If first argument is a Tuple, it must have two elements"))
-        modname = T.args[1]
-        T = T.args[2]
+        modname = T.args[1] # Put symbols in this module
+        T = T.args[2] # `T` is the name of the new subtype of MEnum
     else
-        modname = :nothing
+        modname = :nothing  # Do not create a new module. Use module that is in scope.
     end
-    basetype = Int32 # default
+    basetype = Int32 # default. We may change this below.
     typename = T
     if isa(T, Expr) && T.head === :(::) && length(T.args) == 2 && isa(T.args[1], Symbol)
         typename = T.args[1]
@@ -183,19 +284,22 @@ macro menum(T::Union{Symbol,Expr}, syms...)
     elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
+    # The new subtype of MEnum is now `typename`. No longer use `T`.
+    T = nothing # Do this to signal intent and uncover bugs
     values = Vector{basetype}()
     seen = Set{Symbol}()
     namemap = Dict{basetype,Symbol}()
+    _blocklength = Ref(0)
+    block_max_ind = Vector{Int}(undef, 0)
     lo = hi = 0
     i = zero(basetype)
     hasexpr = false
 
-    if length(syms) == 1 && syms[1] isa Expr && syms[1].head === :block
-        syms = syms[1].args
-    end
+    # Symbols (and their values if present) may be wrapped in `begin`, `end`
+    syms = _check_begin_block(syms)
     for s in syms
         (s, _i) = _sym_and_number(typename, __module__, basetype, s)
-        s === nothing && continue
+        s === nothing && continue # Got a LineNumberNode
         if _i === nothing && i == typemin(basetype) && !isempty(values)
             throw(ArgumentError("overflow in value \"$s\" of MEnum $typename"))
         end
@@ -231,6 +335,42 @@ macro menum(T::Union{Symbol,Expr}, syms...)
             return bitcast($(esc(typename)), convert($(basetype), x))
         end
         MEnums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
+        MEnums.blocklength(::Type{$(esc(typename))}) = $(esc(_blocklength))[]
+        function MEnums.setblocklength!(::Type{$(esc(typename))}, blklen)
+            cur = $(esc(_blocklength))[]
+            if cur == 0
+                $(esc(_blocklength))[] = blklen
+                return blklen
+            else
+                throw(ArgumentError("Resetting block length not allowd."))
+            end
+        end
+        MEnums.numblocks(::Type{$(esc(typename))}) = length($(esc(block_max_ind)))
+        function MEnums.addblocks!(::Type{$(esc(typename))}, n::Integer)
+            blklen = $(esc(_blocklength))[]
+            if iszero(blklen)
+                throw(ArgumentError("Set block length before adding blocks"))
+            end
+            bmaxind = $(esc(block_max_ind))
+            curlen = length(bmaxind)
+            resize!(bmaxind, curlen + n)
+            for i in (curlen + 1):(curlen + n)
+                bmaxind[i] = (i - 1) * blklen
+            end
+            return length(bmaxind)
+        end
+        function MEnums.maxvalind(::Type{$(esc(typename))}, block::Integer)
+            return $(esc(block_max_ind))[block]
+        end
+        function MEnums._incrmaxvalind!(::Type{$(esc(typename))}, block::Integer)
+            mbi = $(esc(block_max_ind))
+            mbi[block] += 1
+            return return mbi[block]
+        end
+        function MEnums.blockindex(x::$(esc(typename)))
+            blknum = div(Int(x), $(esc(_blocklength))[], RoundUp)
+            return blknum
+        end
     end
     if isa(typename, Symbol)
         if modname !== :nothing
@@ -260,6 +400,7 @@ function add!(a, syms...)
     nextnum = length(a) == 0 ? 0 : maximum(keys(nmap)) + 1
     local na
     _module = getmodule(a)
+    count_assigned = 0
     for sym in syms
         (sym, _i) = _sym_and_number(Symbol(a), _module, basetype(a), sym)
         sym in values(nmap) && throw(ArgumentError("Key $sym already defined in $a."))
@@ -270,13 +411,52 @@ function add!(a, syms...)
         nmap[nextnum] = sym
         _bind_var(_module, sym, na)
         nextnum += 1
+        count_assigned += 1
+    end
+    if iszero(count_assigned)
+        throw(ArgumentError("No symbols defined in enum!"))
     end
     return na
 end
 
+function _get_qsyms(syms)
+    syms = _check_begin_block(syms)
+    return (QuoteNode(sym) for sym in syms if ! isa(sym, LineNumberNode))
+end
+
 macro add(a, syms...)
-    qsyms = (QuoteNode(sym) for sym in syms)
+    qsyms = _get_qsyms(syms)
     :(MEnums.add!($(esc(a)), $(qsyms...)))
 end
+
+function add_in_block!(a, block::Integer, syms...)
+    nmap = MEnums.namemap(a)
+    nextnum = maxvalind(a, block) + 1
+    local na
+    _module = getmodule(a)
+    for sym in syms
+        blocklim = blocklength(a) * block
+        if nextnum > blocklim
+            throw(ArgumentError("Attempting to set enum value above block limit $blocklim"))
+        end
+        (sym, _i) = _sym_and_number(Symbol(a), _module, basetype(a), sym)
+        sym in values(nmap) && throw(ArgumentError("Key $sym already defined in $a."))
+        if _i !== nothing
+            throw(ArgumentError("Setting number explicitly not allowed in block mode."))
+        end
+        na = a(nextnum)
+        nmap[nextnum] = sym
+        _bind_var(_module, sym, na)
+        nextnum += 1
+        _incrmaxvalind!(a, block)
+    end
+    return na
+end
+
+macro addinblock(a, block, syms...)
+    qsyms = _get_qsyms(syms)
+    :(MEnums.add_in_block!($(esc(a)), $(esc(block)), $(qsyms...)))
+end
+
 
 end # module MEnums
