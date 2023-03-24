@@ -75,6 +75,7 @@ function maxvalind end
 
 function _incrmaxvalind! end
 
+function blocklength1 end
 
 """
     MEnum{T<:Integer}
@@ -162,20 +163,6 @@ function Base.show(io::IO, m::MIME"text/plain", t::Type{<:MEnum})
     end
 end
 
-# Since we don't guarantee continguous values of instances, this does not work
-# It is taken from the code for Enum
-# generate code to test whether expr is in the given set of values
-# function membershiptest(expr, values)
-#     lo, hi = extrema(values)
-#     if length(values) == hi - lo + 1
-#         :($lo <= $expr <= $hi)
-#     elseif length(values) < 20
-#         foldl((x1,x2)->:($x1 || ($expr == $x2)), values[2:end]; init=:($expr == $(values[1])))
-#     else
-#         :($expr in $(Set(values)))
-#     end
-# end
-
 # give MEnum types scalar behavior in broadcasting
 Base.broadcastable(x::MEnum) = Ref(x)
 
@@ -214,6 +201,17 @@ function _check_begin_block(syms)
     return syms
 end
 
+function _parse_block_length(blen)
+    isa(blen, Integer) && return blen
+    isa(blen, Expr) || throw(ArgumentError("blocklength must be an Integer or an expression."))
+    args = blen.args
+    if blen.head === :call && length(args) == 3 && args[1] === :(^) &&
+        isa(args[2], Int) && isa(args[3], Int)
+        return args[2] ^ args[3]
+    else
+        throw(ArgumentError("Invalid expression for blocklength $(blen)"))
+    end
+end
 
 """
     @menum MEnumName[::BaseType] value1[=x] value2[=y]
@@ -264,14 +262,33 @@ julia> Symbol(apple)
 :apple
 ```
 """
-macro menum(T::Union{Symbol,Expr}, syms...)
-    local modname
-    if isa(T, Expr) && T.head === :tuple # (modulename, menumname)
-        length(T.args) == 2 || throw(ArgumentError("If first argument is a Tuple, it must have two elements"))
-        modname = T.args[1] # Put symbols in this module
-        T = T.args[2] # `T` is the name of the new subtype of MEnum
+macro menum(T0::Union{Symbol,Expr}, syms...)
+    local modname = :nothing # Default, do not create a new module. Use module that is in scope.
+    local typename
+    local _blocklength::Int = 0
+    local init_num_blocks::Int = 0
+    if isa(T0, Expr) && T0.head === :tuple # (modulename, menumname)
+        length(T0.args) >= 1 || throw(ArgumentError("If first argument is a Tuple, it must have at least one element"))
+        T = T0.args[1] # `T` is the name of the new subtype of MEnum
+        for i in 2:lastindex(T0.args)
+            expr = T0.args[i]
+            (isa(expr, Expr) && expr.head === :(=)) || throw(ArgumentError(string("Expecting `=` expression as $(i)th item in init tuple.")))
+            (keyw, val) = (expr.args[1], expr.args[2])
+            if keyw === :blocklength
+                _blocklength = _parse_block_length(val)
+            elseif keyw === :mod # Symbols in this module. TODO, how to allow :module here? It is recognized as Julia reserved word
+                modname = val
+            elseif keyw === :numblocks
+                init_num_blocks = val
+            else
+                throw(ArgumentError(string("Unexpected keyword $(expr.args[1])")))
+            end
+        end
     else
-        modname = :nothing  # Do not create a new module. Use module that is in scope.
+        T = T0
+    end
+    if init_num_blocks > 0 && ! (_blocklength > 0)
+        throw(ArgumentError(string("If numblocks is set then blocklength must be set.")))
     end
     basetype = Int32 # default. We may change this below.
     typename = T
@@ -289,8 +306,10 @@ macro menum(T::Union{Symbol,Expr}, syms...)
     values = Vector{basetype}()
     seen = Set{Symbol}()
     namemap = Dict{basetype,Symbol}()
-    _blocklength = Ref(0)
-    block_max_ind = Vector{Int}(undef, 0)
+    block_max_ind = Vector{Int}(undef, init_num_blocks)
+    for i in 1:init_num_blocks
+        block_max_ind[i] =  (i - 1) * _blocklength
+    end
     lo = hi = 0
     i = zero(basetype)
     hasexpr = false
@@ -335,21 +354,12 @@ macro menum(T::Union{Symbol,Expr}, syms...)
             return bitcast($(esc(typename)), convert($(basetype), x))
         end
         MEnums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
-        MEnums.blocklength(::Type{$(esc(typename))}) = $(esc(_blocklength))[]
-        function MEnums.setblocklength!(::Type{$(esc(typename))}, blklen)
-            cur = $(esc(_blocklength))[]
-            if cur == 0
-                $(esc(_blocklength))[] = blklen
-                return blklen
-            else
-                throw(ArgumentError("Resetting block length not allowd."))
-            end
-        end
+        MEnums.blocklength(::Type{$(esc(typename))}) = $(esc(_blocklength))
         MEnums.numblocks(::Type{$(esc(typename))}) = length($(esc(block_max_ind)))
         function MEnums.addblocks!(::Type{$(esc(typename))}, n::Integer)
-            blklen = $(esc(_blocklength))[]
+            blklen = $(esc(_blocklength))
             if iszero(blklen)
-                throw(ArgumentError("Set block length before adding blocks"))
+                throw(ArgumentError("This MEnum was not initialized with blocks."))
             end
             bmaxind = $(esc(block_max_ind))
             curlen = length(bmaxind)
@@ -368,7 +378,7 @@ macro menum(T::Union{Symbol,Expr}, syms...)
             return return mbi[block]
         end
         function MEnums.blockindex(x::$(esc(typename)))
-            blknum = div(Int(x), $(esc(_blocklength))[], RoundUp)
+            blknum = div(Int(x), $(esc(_blocklength)), RoundUp)
             return blknum
         end
     end
@@ -429,7 +439,8 @@ macro add(a, syms...)
     :(MEnums.add!($(esc(a)), $(qsyms...)))
 end
 
-function add_in_block!(a, block::Integer, syms...)
+function add_in_block!(a, _block::Union{Integer, MEnum}, syms...)
+    block = Int(_block)
     nmap = MEnums.namemap(a)
     nextnum = maxvalind(a, block) + 1
     local na
@@ -458,5 +469,18 @@ macro addinblock(a, block, syms...)
     :(MEnums.add_in_block!($(esc(a)), $(esc(block)), $(qsyms...)))
 end
 
+# Since we don't guarantee continguous values of instances, this does not work
+# It is taken from the code for Enum
+# generate code to test whether expr is in the given set of values
+# function membershiptest(expr, values)
+#     lo, hi = extrema(values)
+#     if length(values) == hi - lo + 1
+#         :($lo <= $expr <= $hi)
+#     elseif length(values) < 20
+#         foldl((x1,x2)->:($x1 || ($expr == $x2)), values[2:end]; init=:($expr == $(values[1])))
+#     else
+#         :($expr in $(Set(values)))
+#     end
+# end
 
 end # module MEnums

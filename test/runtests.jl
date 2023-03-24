@@ -8,23 +8,18 @@ using MEnums: @menum
 
 @menum A3 a3 b3 c3
 
-@menum (A4mod, A4) a4 b4
+@menum (A4, mod=A4mod) a4 b4
 
 end
 
 @testset "blocks" begin
-    @menum Z
-    @test_throws ArgumentError addblocks!(Z, 10)
+    @menum (Z, blocklength=3)
     @test numblocks(Z) == 0
-    @test blocklength(Z) == 0
-    setblocklength!(Z, 3)
     @test blocklength(Z) == 3
-    @test numblocks(Z) == 0
     addblocks!(Z, 10)
     @test numblocks(Z) == 10
     addblocks!(Z, 10)
     @test numblocks(Z) == 20
-    @test_throws ArgumentError setblocklength!(Z, 4)
     @test maxvalind(Z, 1) == 0
     @test maxvalind(Z, 2) == 3
     @addinblock Z 1 a b c
@@ -34,6 +29,11 @@ end
     @test maxvalind(Z, 2) == 6
     @test blockindex(a) == 1
     @test blockindex(x) == 2
+
+    @menum ZZ
+    @test_throws ArgumentError addblocks!(ZZ, 5)
+    @menum (YY, blocklength=10^6)
+    @test blocklength(YY) == 1000000
 end
 
 @testset "MEnums.jl" begin
@@ -45,12 +45,15 @@ end
     @test Base.cconvert(Int, a1) === Int(a1)
     @test instances(A1) == (a1, b1, c1)
     @test MEnums.getmodule(A1) == Main
-    # Base.Enum with throw an error with the following
+    # Base.Enum will throw an error with the following
     @test Integer(A1(111)) == 111
     @test isless(a1, b1)
     @test a1 < b1
+    @test basetype(A1) == Int32
+    @menum A1_64::Int64
+    @test basetype(A1_64) == Int64
 
-    @menum (A2mod, A2) a2 b2 c2
+    @menum (A2, mod=A2mod) a2 b2 c2
     @test Int.((A2mod.a2, A2mod.b2, A2mod.c2)) == (0, 1, 2)
     @test_throws UndefVarError a2 == 0
     @test MEnums.getmodule(A2) == A2mod
@@ -80,7 +83,7 @@ end
 
     @test_throws ArgumentError @add A1 z1
 
-    @menum (A5mod, A5) a5=2 b5=3 c5
+    @menum (A5, mod=A5mod) a5=2 b5=3 c5
     @test Int(A5mod.c5) == 4
 
     @add A5 d5 e5=11 f5
