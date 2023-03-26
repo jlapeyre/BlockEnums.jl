@@ -63,6 +63,14 @@ is returned.
 """
 function addblocks! end
 
+"""
+    compact_show(t::Type{<:MEnum})
+
+Return `true` if compact show was set when `t` was defined. This omits printing
+the corresponding integer when printing. To enable compact show, include the
+key/val pair `compactshow=true` when defining `t`.
+"""
+function compact_show end
 
 """
     maxvalind(t::Type{<:MEnum}, block_num::Integer)
@@ -145,6 +153,7 @@ end
 function Base.show(io::IO, ::MIME"text/plain", x::MEnum)
     print(io, x, "::")
     show(IOContext(io, :compact => true), typeof(x))
+    compact_show(typeof(x)) && return
     print(io, " = ")
     show(io, Integer(x))
 end
@@ -267,6 +276,7 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
     local typename
     local _blocklength::Int = 0
     local init_num_blocks::Int = 0
+    _compact_show=false
     if isa(T0, Expr) && T0.head === :tuple # (modulename, menumname)
         length(T0.args) >= 1 || throw(ArgumentError("If first argument is a Tuple, it must have at least one element"))
         T = T0.args[1] # `T` is the name of the new subtype of MEnum
@@ -280,6 +290,8 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
                 modname = val
             elseif keyw === :numblocks
                 init_num_blocks = val
+            elseif keyw === :compactshow
+                _compact_show = val
             else
                 throw(ArgumentError(string("Unexpected keyword $(expr.args[1])")))
             end
@@ -380,6 +392,9 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
         function MEnums.blockindex(x::$(esc(typename)))
             blknum = div(Int(x), $(esc(_blocklength)), RoundUp)
             return blknum
+        end
+        function MEnums.compact_show(::Type{$(esc(typename))})
+            return $(esc(_compact_show))
         end
     end
     if isa(typename, Symbol)
