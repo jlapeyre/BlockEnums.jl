@@ -12,7 +12,9 @@ using MEnums: @menum
 
 end
 
-include("test_jet.jl")
+@static if Base.VERSION >= v"1.7"
+    include("test_jet.jl")
+end
 include("test_aqua.jl")
 
 @testset "blocks" begin
