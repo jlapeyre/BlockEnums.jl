@@ -2,7 +2,7 @@
 
 [![Build Status](https://github.com/jlapeyre/MEnums.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/jlapeyre/MEnums.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/jlapeyre/MEnums.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/jlapeyre/MEnums.jl)
-
+[![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
 MEnums is like the built-in Enums. The main differences are
 
@@ -31,6 +31,23 @@ pear = 2
 banana = 1
 ```
 
+Some block features
+
+```julia
+julia> using MEnums
+
+julia> @menum (Myenum, mod=MyenumMod, blocklength=100, numblocks=10, compactshow=false)
+
+julia> @addinblock Myenum 1 a b c
+c::Myenum = 3
+
+julia> @addinblock Myenum 3 x y z
+z::Myenum = 203
+
+julia> MEnums.blockindex(MyenumMod.y)
+3
+```
+
 ### Methods for functions in `Base`
 
 Methods for the following functions in `Base` are defined and follow the established semantics.
@@ -43,3 +60,7 @@ Methods for the following functions in `Base` are defined and follow the establi
 * `typemin`, `typemax` These are the min and max of values with names bound to them.
 * `instances`
 * `print`
+
+### Testing
+
+MEnums passes [JET.jl](https://github.com/aviatesk/JET.jl) and [Aqua.jl](https://github.com/JuliaTesting/Aqua.jl) tests.
