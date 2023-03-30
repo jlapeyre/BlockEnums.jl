@@ -12,6 +12,9 @@ using MEnums: @menum
 
 end
 
+include("test_jet.jl")
+include("test_aqua.jl")
+
 @testset "blocks" begin
     @menum (Z, blocklength=3)
     @test numblocks(Z) == 0

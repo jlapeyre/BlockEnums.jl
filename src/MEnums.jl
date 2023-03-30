@@ -14,6 +14,8 @@ Perhaps this should not be advertized or exposed.
 """
 function namemap end
 
+namemap(arg::Any) = throw(MethodError(namemap, (arg,)))
+
 """
     getmodule(t::Type{<:MEnum})
 
@@ -390,6 +392,7 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
             return return mbi[block]
         end
         function MEnums.blockindex(x::$(esc(typename)))
+            $(esc(_blocklength)) > 0 || return 0
             blknum = div(Int(x), $(esc(_blocklength)), RoundUp)
             return blknum
         end
