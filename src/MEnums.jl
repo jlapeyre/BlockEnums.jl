@@ -399,6 +399,10 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
         function MEnums.compact_show(::Type{$(esc(typename))})
             return $(esc(_compact_show))
         end
+        # JET complains about the fallback calls to array_subpadding when calling
+        # reinterpret(basetype, ::Vector{typename}). So we define these.
+        Base.array_subpadding(::Type{$(esc(typename))}, ::Type{$basetype}) = true
+        Base.array_subpadding(::Type{$basetype}, ::Type{$(esc(typename))}) = true
     end
     if isa(typename, Symbol)
         if modname !== :nothing

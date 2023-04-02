@@ -4,6 +4,8 @@
 [![Coverage](https://codecov.io/gh/jlapeyre/MEnums.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/jlapeyre/MEnums.jl)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![JET QA](https://img.shields.io/badge/JET.jl-%E2%9C%88%EF%B8%8F-%23aa4444)](https://github.com/aviatesk/JET.jl)
+<!-- [![deps](https://juliahub.com/docs/MEnums/deps.svg)](https://juliahub.com/ui/Packages/MEnums/2Dg1l?t=2) -->
+<!-- [![version](https://juliahub.com/docs/MEnums/version.svg)](https://juliahub.com/ui/Packages/MEnums/2Dg1l) -->
 
 MEnums is like the built-in Enums. The main differences are
 

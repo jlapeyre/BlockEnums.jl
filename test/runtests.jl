@@ -17,6 +17,16 @@ end
 end
 include("test_aqua.jl")
 
+# JET does not like this reinterpret. But JET does not
+# examine this code.
+@testset "reinterpret" begin
+    @menum ZZ zz1 zz2 zz3
+    v1 = [zz1, zz2, zz3]
+    v2 = reinterpret(MEnums.basetype(ZZ), v1)
+    @test eltype(v2) === MEnums.basetype(ZZ)
+    @test all(x->isa(x, MEnums.basetype(ZZ)), v2)
+end
+
 @testset "blocks" begin
     @menum (Z, blocklength=3)
     @test numblocks(Z) == 0
