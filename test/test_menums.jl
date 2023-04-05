@@ -34,6 +34,18 @@ end
     @test maxvalind(Z, 2) == 6
     @test blockindex(a) == 1
     @test blockindex(x) == 2
+    @test inblock(x, 2)
+    @test inblock(z, 2)
+    @test ! inblock(z, 1)
+    @test inblock(a, 1)
+    @test blockrange(Z, 2) === 4:6
+    @test ltblock(a, 2)
+    @test leblock(a, 2)
+    @test leblock(z, 2)
+    @test geblock(a, 1)
+    @test geblock(z, 1)
+    @test leblock(a, 1)
+    @test ! leblock(z, 1)
 
     @menum ZZ
     @test_throws ArgumentError addblocks!(ZZ, 5)

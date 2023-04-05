@@ -1,6 +1,6 @@
 using MEnums
 using MEnums: blocklength, setblocklength!, numblocks, addblocks!, maxvalind, @addinblock,
-    blockindex
+    blockindex, blockrange, inblock, ltblock, gtblock, leblock, geblock
 using Test
 
 @static if Base.VERSION >= v"1.7"

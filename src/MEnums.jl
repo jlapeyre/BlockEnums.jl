@@ -4,7 +4,7 @@ import Core.Intrinsics.bitcast
 
 export MEnum, @menum, add!, @add, blocklength, setblocklength!, getmodule, namemap,
     numblocks, addblocks!, add_in_block!, maxvalind, @addinblock,
-    blockindex, basetype
+    blockindex, basetype, blockrange, inblock, gtblock, geblock, ltblock, leblock
 
 """
     namemap(::Type{<:MEnum})
@@ -130,6 +130,41 @@ Base.typemax(t::Type{<:MEnum}) = maximum(keys(namemap(t)))
 Return a `Tuple` of all of the named values of `t`.
 """
 Base.instances(t::Type{<:MEnum}) = (sort!(Any[t(v) for v in keys(namemap(t))])...,)
+
+"""
+    blockrange(t::Type{<:MEnum}, blockind)
+
+Return the range of values of `t` in block number `blockind`.
+"""
+function blockrange(t::Type{<:MEnum}, blockind)
+    _blockind = Integer(blockind)
+    (_blockind <= numblocks(t) && _blockind >= 1) ||
+        throw(ArgumentError("Block index $blockind is out of bounds"))
+    blen = MEnums.blocklength(t)
+    start = blen * (_blockind - 1) + 1
+    stop = blen * _blockind
+    return start:stop
+end
+
+function inblock(el::MEnum, blockind)
+    return MEnums.val(el) in blockrange(typeof(el), blockind)
+end
+
+function gtblock(el::MEnum, blockind)
+    return MEnums.val(el) > last(blockrange(typeof(el), blockind))
+end
+
+function ltblock(el::MEnum, blockind)
+    return MEnums.val(el) < first(blockrange(typeof(el), blockind))
+end
+
+function geblock(el::MEnum, blockind)
+    return MEnums.val(el) >= first(blockrange(typeof(el), blockind))
+end
+
+function leblock(el::MEnum, blockind)
+    return MEnums.val(el) <= last(blockrange(typeof(el), blockind))
+end
 
 function _symbol(x::MEnum)
     names = namemap(typeof(x))
