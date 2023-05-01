@@ -1,7 +1,7 @@
-name = "MEnums"
+name = "BlockEnums"
 uuid = "7c338ca5-b20e-417b-9799-aae6c720705e"
 authors = ["John Lapeyre <jlapeyre@users.noreply.github.com> and contributors"]
-version = "0.6.2"
+version = "1.0.0"
 
 [compat]
 julia = "1.5"

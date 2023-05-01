@@ -1,13 +1,13 @@
-module MEnums
+module BlockEnums
 
 import Core.Intrinsics.bitcast
 
-export MEnum, @menum, add!, @add, blocklength, setblocklength!, getmodule, namemap,
+export BlockEnum, @blockenum, add!, @add, blocklength, setblocklength!, getmodule, namemap,
     numblocks, addblocks!, add_in_block!, maxvalind, @addinblock,
     blockindex, basetype, blockrange, inblock, gtblock, geblock, ltblock, leblock
 
 """
-    namemap(::Type{<:MEnum})
+    namemap(::Type{<:BlockEnum})
 
 Return the `Dict` mapping all values to name symbols.
 Perhaps this should not be advertized or exposed.
@@ -17,14 +17,14 @@ function namemap end
 namemap(arg::Any) = throw(MethodError(namemap, (arg,)))
 
 """
-    getmodule(t::Type{<:MEnum})
+    getmodule(t::Type{<:BlockEnum})
 
 Get the module in which `t` is defined.
 """
 function getmodule end
 
 """
-    blocklength(t::Type{<:MEnum})
+    blocklength(t::Type{<:BlockEnum})
 
 Get the length of blocks that the range of values of
 `t` is partitioned into.
@@ -32,14 +32,14 @@ Get the length of blocks that the range of values of
 function blocklength end
 
 """
-    blockindex(v::MEnum)
+    blockindex(v::BlockEnum)
 
 Get the index of the block of values `v` belongs to.
 """
 function blockindex end
 
 """
-    setblocklength!(t::Type{<:MEnum}, block_length)
+    setblocklength!(t::Type{<:BlockEnum}, block_length)
 
 Set the length of each block in the partition of the values of `t`. This
 can only be called once.  In order to use the blocks you must first set up
@@ -48,7 +48,7 @@ bookkeeping by calling `addblocks!`.  These blocks are called "active".
 function setblocklength! end
 
 """
-    numblocks(t::Type{<:MEnum{T}}) where T <: Integer
+    numblocks(t::Type{<:BlockEnum{T}}) where T <: Integer
 
 Return the number of blocks for which bookkeeping has been set up. The
 set of values of `t` is the nonzero values of `T`, which is typically very large. Bookkeeping of
@@ -57,7 +57,7 @@ blocks requires storage. So you can only set up some of the blocks for use.
 function numblocks end
 
 """
-    addblocks!(t::Type{<:MEnum}), nblocks::Integer)
+    addblocks!(t::Type{<:BlockEnum}), nblocks::Integer)
 
 Add and initialize `nblocks` blocks to the bookkeeping
 for `t`. The number of active blocks for the type
@@ -66,7 +66,7 @@ is returned.
 function addblocks! end
 
 """
-    compact_show(t::Type{<:MEnum})
+    compact_show(t::Type{<:BlockEnum})
 
 Return `true` if compact show was set when `t` was defined. This omits printing
 the corresponding integer when printing. To enable compact show, include the
@@ -75,7 +75,7 @@ key/val pair `compactshow=true` when defining `t`.
 function compact_show end
 
 """
-    maxvalind(t::Type{<:MEnum}, block_num::Integer)
+    maxvalind(t::Type{<:BlockEnum}, block_num::Integer)
 
 Return the largest index for which a name has been assigned in the
 `block_num`th block `t`. This number is constrained to be within
@@ -88,93 +88,93 @@ function _incrmaxvalind! end
 function blocklength1 end
 
 """
-    MEnum{T<:Integer}
+    BlockEnum{T<:Integer}
 
-The abstract supertype of all enumerated types defined with [`@menum`](@ref).
+The abstract supertype of all enumerated types defined with [`@blockenum`](@ref).
 """
-abstract type MEnum{T<:Integer} end
+abstract type BlockEnum{T<:Integer} end
 
 """
-    basetype(V::Type{<:MEnum{T}})
+    basetype(V::Type{<:BlockEnum{T}})
 
 Return `T`, which is the bitstype whose values are bitcast to
 the type `V`.
 This is the type of the value returned by `Integer(x::V)`.
 The type is in a sense the underlying type of `V`.
 """
-basetype(::Type{<:MEnum{T}}) where {T<:Integer} = T
+basetype(::Type{<:BlockEnum{T}}) where {T<:Integer} = T
 
 """
-    val(x::MEnum{T})
+    val(x::BlockEnum{T})
 
 Return `x` bitcast to type `T`.
 """
-val(x::MEnum{T}) where T = bitcast(T, x)
+val(x::BlockEnum{T}) where T = bitcast(T, x)
 
-(::Type{T})(x::MEnum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
-Base.cconvert(::Type{T}, x::MEnum{T2}) where {T<:Integer,T2<:Integer} = T(x)
-Base.write(io::IO, x::MEnum{T}) where {T<:Integer} = write(io, T(x))
-Base.read(io::IO, ::Type{T}) where {T<:MEnum} = T(read(io, basetype(T)))
+(::Type{T})(x::BlockEnum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
+Base.cconvert(::Type{T}, x::BlockEnum{T2}) where {T<:Integer,T2<:Integer} = T(x)
+Base.write(io::IO, x::BlockEnum{T}) where {T<:Integer} = write(io, T(x))
+Base.read(io::IO, ::Type{T}) where {T<:BlockEnum} = T(read(io, basetype(T)))
 
-Base.isless(x::T, y::T) where {T<:MEnum} = isless(basetype(T)(x), basetype(T)(y))
+Base.isless(x::T, y::T) where {T<:BlockEnum} = isless(basetype(T)(x), basetype(T)(y))
 
-Base.Symbol(x::MEnum)::Symbol = _symbol(x)
+Base.Symbol(x::BlockEnum)::Symbol = _symbol(x)
 
-Base.length(t::Type{<:MEnum}) = length(namemap(t))
-Base.typemin(t::Type{<:MEnum}) = minimum(keys(namemap(t)))
-Base.typemax(t::Type{<:MEnum}) = maximum(keys(namemap(t)))
+Base.length(t::Type{<:BlockEnum}) = length(namemap(t))
+Base.typemin(t::Type{<:BlockEnum}) = minimum(keys(namemap(t)))
+Base.typemax(t::Type{<:BlockEnum}) = maximum(keys(namemap(t)))
 
 """
-    instances(t::Type{<:MEnum})
+    instances(t::Type{<:BlockEnum})
 
 Return a `Tuple` of all of the named values of `t`.
 """
-Base.instances(t::Type{<:MEnum}) = (sort!(Any[t(v) for v in keys(namemap(t))])...,)
+Base.instances(t::Type{<:BlockEnum}) = (sort!(Any[t(v) for v in keys(namemap(t))])...,)
 
 """
-    blockrange(t::Type{<:MEnum}, blockind)
+    blockrange(t::Type{<:BlockEnum}, blockind)
 
 Return the range of values of `t` in block number `blockind`.
 """
-function blockrange(t::Type{<:MEnum}, blockind)
+function blockrange(t::Type{<:BlockEnum}, blockind)
     _blockind = Integer(blockind)
     (_blockind <= numblocks(t) && _blockind >= 1) ||
         throw(ArgumentError("Block index $blockind is out of bounds"))
-    blen = MEnums.blocklength(t)
+    blen = BlockEnums.blocklength(t)
     start = blen * (_blockind - 1) + 1
     stop = blen * _blockind
     return start:stop
 end
 
-function inblock(el::MEnum, blockind)
-    return MEnums.val(el) in blockrange(typeof(el), blockind)
+function inblock(el::BlockEnum, blockind)
+    return BlockEnums.val(el) in blockrange(typeof(el), blockind)
 end
 
-function gtblock(el::MEnum, blockind)
-    return MEnums.val(el) > last(blockrange(typeof(el), blockind))
+function gtblock(el::BlockEnum, blockind)
+    return BlockEnums.val(el) > last(blockrange(typeof(el), blockind))
 end
 
-function ltblock(el::MEnum, blockind)
-    return MEnums.val(el) < first(blockrange(typeof(el), blockind))
+function ltblock(el::BlockEnum, blockind)
+    return BlockEnums.val(el) < first(blockrange(typeof(el), blockind))
 end
 
-function geblock(el::MEnum, blockind)
-    return MEnums.val(el) >= first(blockrange(typeof(el), blockind))
+function geblock(el::BlockEnum, blockind)
+    return BlockEnums.val(el) >= first(blockrange(typeof(el), blockind))
 end
 
-function leblock(el::MEnum, blockind)
-    return MEnums.val(el) <= last(blockrange(typeof(el), blockind))
+function leblock(el::BlockEnum, blockind)
+    return BlockEnums.val(el) <= last(blockrange(typeof(el), blockind))
 end
 
-function _symbol(x::MEnum)
+function _symbol(x::BlockEnum)
     names = namemap(typeof(x))
     x = Integer(x)
     get(() -> Symbol("<invalid #$x>"), names, x)::Symbol
 end
 
-Base.print(io::IO, x::MEnum) = print(io, _symbol(x))
+Base.print(io::IO, x::BlockEnum) = print(io, _symbol(x))
 
-function Base.show(io::IO, x::MEnum)
+function Base.show(io::IO, x::BlockEnum)
     sym = _symbol(x)
     if !(get(io, :compact, false)::Bool)
         from = get(io, :module, Main)
@@ -187,7 +187,7 @@ function Base.show(io::IO, x::MEnum)
     print(io, sym)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", x::MEnum)
+function Base.show(io::IO, ::MIME"text/plain", x::BlockEnum)
     print(io, x, "::")
     show(IOContext(io, :compact => true), typeof(x))
     compact_show(typeof(x)) && return
@@ -195,9 +195,9 @@ function Base.show(io::IO, ::MIME"text/plain", x::MEnum)
     show(io, Integer(x))
 end
 
-function Base.show(io::IO, m::MIME"text/plain", t::Type{<:MEnum})
+function Base.show(io::IO, m::MIME"text/plain", t::Type{<:BlockEnum})
     if isconcretetype(t)
-        print(io, "MEnum ")
+        print(io, "BlockEnum ")
         Base.show_datatype(io, t)
         print(io, ":")
         for x in instances(t)
@@ -209,10 +209,10 @@ function Base.show(io::IO, m::MIME"text/plain", t::Type{<:MEnum})
     end
 end
 
-# give MEnum types scalar behavior in broadcasting
-Base.broadcastable(x::MEnum) = Ref(x)
+# give BlockEnum types scalar behavior in broadcasting
+Base.broadcastable(x::BlockEnum) = Ref(x)
 
-@noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for MEnum $(typename): $x")))
+@noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for BlockEnum $(typename): $x")))
 
 # Following values of `s` and what is returned
 # `syname` returns (:syname, nothing)
@@ -227,15 +227,15 @@ function _sym_and_number(typename, _module, basetype, s)
         length(s.args) == 2 && isa(s.args[1], Symbol)
         i = Core.eval(_module, s.args[2]) # allow exprs, e.g. uint128"1"
         if !isa(i, Integer)
-            throw(ArgumentError("invalid value for MEnum $typename, $s; values must be integers"))
+            throw(ArgumentError("invalid value for BlockEnum $typename, $s; values must be integers"))
         end
         i = convert(basetype, i)
         s = s.args[1] # Set `s` to just the symbol
     else
-        throw(ArgumentError(string("invalid argument for MEnum ", typename, ": ", s)))
+        throw(ArgumentError(string("invalid argument for BlockEnum ", typename, ": ", s)))
     end
     if !Base.isidentifier(s)
-        throw(ArgumentError("invalid name for MEnum $typename; \"$s\" is not a valid identifier"))
+        throw(ArgumentError("invalid name for BlockEnum $typename; \"$s\" is not a valid identifier"))
     end
     return (s, i)
 end
@@ -260,15 +260,15 @@ function _parse_block_length(blen)
 end
 
 """
-    @menum MEnumName[::BaseType] value1[=x] value2[=y]
+    @blockenum BlockEnumName[::BaseType] value1[=x] value2[=y]
 
-Create an `MEnum{BaseType}` subtype with name `MEnumName` and enum member values of
+Create an `BlockEnum{BaseType}` subtype with name `BlockEnumName` and enum member values of
 `value1` and `value2` with optional assigned values of `x` and `y`, respectively.
-`MEnumName` can be used just like other types and enum member values as regular values, such as
+`BlockEnumName` can be used just like other types and enum member values as regular values, such as
 
 # Examples
 ```jldoctest fruitenum
-julia> @menum Fruit apple=1 orange=2 kiwi=3
+julia> @blockenum Fruit apple=1 orange=2 kiwi=3
 
 julia> f(x::Fruit) = "I'm a Fruit with value: \$(Int(x))"
 f (generic function with 1 method)
@@ -283,7 +283,7 @@ apple::Fruit = 1
 Values can also be specified inside a `begin` block, e.g.
 
 ```julia
-@menum MEnumName begin
+@blockenum BlockEnumName begin
     value1
     value2
 end
@@ -308,15 +308,15 @@ julia> Symbol(apple)
 :apple
 ```
 """
-macro menum(T0::Union{Symbol,Expr}, syms...)
+macro blockenum(T0::Union{Symbol,Expr}, syms...)
     local modname = :nothing # Default, do not create a new module. Use module that is in scope.
     local typename
     local _blocklength::Int = 0
     local init_num_blocks::Int = 0
     _compact_show=false
-    if isa(T0, Expr) && T0.head === :tuple # (modulename, menumname)
+    if isa(T0, Expr) && T0.head === :tuple # (modulename, blockenumname)
         length(T0.args) >= 1 || throw(ArgumentError("If first argument is a Tuple, it must have at least one element"))
-        T = T0.args[1] # `T` is the name of the new subtype of MEnum
+        T = T0.args[1] # `T` is the name of the new subtype of BlockEnum
         for i in 2:lastindex(T0.args)
             expr = T0.args[i]
             (isa(expr, Expr) && expr.head === :(=)) || throw(ArgumentError(string("Expecting `=` expression as $(i)th item in init tuple.")))
@@ -345,12 +345,12 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
         typename = T.args[1]
         basetype = Core.eval(__module__, T.args[2])
         if !isa(basetype, DataType) || !(basetype <: Integer) || !isbitstype(basetype)
-            throw(ArgumentError("invalid base type for MEnum $typename, $T=::$basetype; base type must be an integer primitive type"))
+            throw(ArgumentError("invalid base type for BlockEnum $typename, $T=::$basetype; base type must be an integer primitive type"))
         end
     elseif !isa(T, Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    # The new subtype of MEnum is now `typename`. No longer use `T`.
+    # The new subtype of BlockEnum is now `typename`. No longer use `T`.
     T = nothing # Do this to signal intent and uncover bugs
     values = Vector{basetype}()
     seen = Set{Symbol}()
@@ -369,7 +369,7 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
         (s, _i) = _sym_and_number(typename, __module__, basetype, s)
         s === nothing && continue # Got a LineNumberNode
         if _i === nothing && i == typemin(basetype) && !isempty(values)
-            throw(ArgumentError("overflow in value \"$s\" of MEnum $typename"))
+            throw(ArgumentError("overflow in value \"$s\" of BlockEnum $typename"))
         end
         if _i !== nothing
             hasexpr = true
@@ -377,12 +377,12 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
         end
         s = s::Symbol
         if hasexpr && haskey(namemap, i)
-            throw(ArgumentError("both $s and $(namemap[i]) have value $i in MEnum $typename; values must be unique"))
+            throw(ArgumentError("both $s and $(namemap[i]) have value $i in BlockEnum $typename; values must be unique"))
         end
         namemap[i] = s
         push!(values, i)
         if s in seen
-            throw(ArgumentError("name \"$s\" in MEnum $typename is not unique"))
+            throw(ArgumentError("name \"$s\" in BlockEnum $typename is not unique"))
         end
         push!(seen, s)
         if length(values) == 1
@@ -395,20 +395,20 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
     end
     blk = quote
         # enum definition
-        Base.@__doc__(primitive type $(esc(typename)) <: MEnum{$(basetype)} $(sizeof(basetype) * 8) end)
+        Base.@__doc__(primitive type $(esc(typename)) <: BlockEnum{$(basetype)} $(sizeof(basetype) * 8) end)
         function $(esc(typename))(x::Integer)
             if x > typemax($basetype) || x < typemin($basetype)
                 enum_argument_error($(Expr(:quote, typename)), x)
             end
             return bitcast($(esc(typename)), convert($(basetype), x))
         end
-        MEnums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
-        MEnums.blocklength(::Type{$(esc(typename))}) = $(esc(_blocklength))
-        MEnums.numblocks(::Type{$(esc(typename))}) = length($(esc(block_max_ind)))
-        function MEnums.addblocks!(::Type{$(esc(typename))}, n::Integer)
+        BlockEnums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
+        BlockEnums.blocklength(::Type{$(esc(typename))}) = $(esc(_blocklength))
+        BlockEnums.numblocks(::Type{$(esc(typename))}) = length($(esc(block_max_ind)))
+        function BlockEnums.addblocks!(::Type{$(esc(typename))}, n::Integer)
             blklen = $(esc(_blocklength))
             if iszero(blklen)
-                throw(ArgumentError("This MEnum was not initialized with blocks."))
+                throw(ArgumentError("This BlockEnum was not initialized with blocks."))
             end
             bmaxind = $(esc(block_max_ind))
             curlen = length(bmaxind)
@@ -418,20 +418,20 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
             end
             return length(bmaxind)
         end
-        function MEnums.maxvalind(::Type{$(esc(typename))}, block::Integer)
+        function BlockEnums.maxvalind(::Type{$(esc(typename))}, block::Integer)
             return $(esc(block_max_ind))[block]
         end
-        function MEnums._incrmaxvalind!(::Type{$(esc(typename))}, block::Integer)
+        function BlockEnums._incrmaxvalind!(::Type{$(esc(typename))}, block::Integer)
             mbi = $(esc(block_max_ind))
             mbi[block] += 1
             return return mbi[block]
         end
-        function MEnums.blockindex(x::$(esc(typename)))
+        function BlockEnums.blockindex(x::$(esc(typename)))
             $(esc(_blocklength)) > 0 || return 0
             blknum = div(Int(x), $(esc(_blocklength)), RoundUp)
             return blknum
         end
-        function MEnums.compact_show(::Type{$(esc(typename))})
+        function BlockEnums.compact_show(::Type{$(esc(typename))})
             return $(esc(_compact_show))
         end
         # JET complains about the fallback calls to array_subpadding when calling
@@ -439,6 +439,7 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
         Base.array_subpadding(::Type{$(esc(typename))}, ::Type{$basetype}) = true
         Base.array_subpadding(::Type{$basetype}, ::Type{$(esc(typename))}) = true
     end
+    @show __module__
     if isa(typename, Symbol)
         if modname !== :nothing
             push!(blk.args, :(module $(esc(modname)); end))
@@ -446,8 +447,8 @@ macro menum(T0::Union{Symbol,Expr}, syms...)
             modname = __module__
         end
         push!(blk.args,
-              :(MEnums.getmodule(::Type{$(esc(typename))}) = $(esc(modname))))
-        push!(blk.args, :(MEnums._bind_vars($(esc(typename)))))
+              :(BlockEnums.getmodule(::Type{$(esc(typename))}) = $(esc(modname))))
+        push!(blk.args, :(BlockEnums._bind_vars($(esc(typename)))))
     end
     push!(blk.args, :nothing)
     blk.head = :toplevel
@@ -463,7 +464,7 @@ end
 _bind_var(mod, sym, instance) = mod.eval(:(const $sym = $instance; export $sym))
 
 function add!(a, syms...)
-    nmap = MEnums.namemap(a)
+    nmap = BlockEnums.namemap(a)
     nextnum = length(a) == 0 ? 0 : maximum(keys(nmap)) + 1
     local na
     _module = getmodule(a)
@@ -493,12 +494,12 @@ end
 
 macro add(a, syms...)
     qsyms = _get_qsyms(syms)
-    :(MEnums.add!($(esc(a)), $(qsyms...)))
+    :(BlockEnums.add!($(esc(a)), $(qsyms...)))
 end
 
-function add_in_block!(a, _block::Union{Integer, MEnum}, syms...)
+function add_in_block!(a, _block::Union{Integer, BlockEnum}, syms...)
     block = Int(_block)
-    nmap = MEnums.namemap(a)
+    nmap = BlockEnums.namemap(a)
     nextnum = maxvalind(a, block) + 1
     local na
     _module = getmodule(a)
@@ -523,7 +524,7 @@ end
 
 macro addinblock(a, block, syms...)
     qsyms = _get_qsyms(syms)
-    :(MEnums.add_in_block!($(esc(a)), $(esc(block)), $(qsyms...)))
+    :(BlockEnums.add_in_block!($(esc(a)), $(esc(block)), $(qsyms...)))
 end
 
 # Since we don't guarantee continguous values of instances, this does not work
@@ -540,4 +541,4 @@ end
 #     end
 # end
 
-end # module MEnums
+end # module BlockEnums

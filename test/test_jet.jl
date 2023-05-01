@@ -1,6 +1,6 @@
 # Borrowed from QuantumOpticsBase
 using Test
-using MEnums
+using BlockEnums
 using JET
 
 using JET: ReportPass, BasicPass, InferenceErrorReport, UncaughtExceptionReport
@@ -20,16 +20,16 @@ function (::MayThrowIsOk)(report_type::Type{<:InferenceErrorReport}, @nospeciali
 end
 
 @testset "jet single calls" begin
-    @menum XX xx1 xx2
+    @blockenum XX xx1 xx2
     v = [xx1, xx2]
-    result = @report_call reinterpret(MEnums.basetype(XX), v)
+    result = @report_call reinterpret(BlockEnums.basetype(XX), v)
     @show result
     @test length(JET.get_reports(result)) == 0
 end
 
 @testset "jet on package" begin
     rep = report_package(
-        "MEnums";
+        "BlockEnums";
         report_pass=MayThrowIsOk(), # TODO have something more fine grained than a generic "do not care about thrown errors"
     )
     @show rep
