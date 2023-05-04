@@ -10,9 +10,13 @@
 BlockEnums is like the built-in Enums. The main differences are
 
 * Enumerated types are mutable in the sense that instances may be added after the type is created.
+* The type may be optionally enclosed in a module (a namespace).
 * The enumeration may be partitioned into blocks of values. For example `@addinblock A 2 x` would add
 the instance `x` to type `A` in the second block of indices.
 
+These are supported by keyword arguments `blocklength`, `mod`, `numblocks`.
+There is also a keyword `compactshow`. This omits printing the integer associated with the enum value
+when displaying.
 
 ```julia
 julia> using BlockEnums
