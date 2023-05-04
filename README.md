@@ -15,8 +15,8 @@ BlockEnums is like the built-in Enums. The main differences are
 the instance `x` to type `A` in the second block of indices.
 
 These are supported by keyword arguments `blocklength`, `mod`, `numblocks`.
-There is also a keyword `compactshow`. This omits printing the integer associated with the enum value
-when displaying.
+There is also a keyword `compactshow` that causes the integer associated with the enum value to be
+omitted when displaying.
 
 ```julia
 julia> using BlockEnums
