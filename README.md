@@ -70,4 +70,10 @@ Methods for the following functions in `Base` are defined and follow the establi
 
 ### Testing
 
+
+
 BlockEnums passes [JET.jl](https://github.com/aviatesk/JET.jl) and [Aqua.jl](https://github.com/JuliaTesting/Aqua.jl) tests.
+
+### Related packages
+
+See [EnumsX](https://github.com/fredrikekre/EnumX.jl) and other packages listed at the bottom of that page.
