@@ -1,15 +1,26 @@
+"""
+    module BlockEnums
+
+`BlockEnums` is a package (and module) providing the type `BlockEnum`.
+Concrete subtypes are created with the `@blockenum` macro, which is similar to `Enums.@enum`.
+"""
 module BlockEnums
 
 import Core.Intrinsics.bitcast
 
-export BlockEnum, @blockenum, add!, @add, blocklength, setblocklength!, getmodule, namemap,
+export BlockEnum, @blockenum, add!, @add, blocklength, getmodule, namemap,
     numblocks, addblocks!, add_in_block!, maxvalind, @addinblock,
     blockindex, basetype, blockrange, inblock, gtblock, geblock, ltblock, leblock
+
+export setblocklength!
 
 """
     namemap(::Type{<:BlockEnum})
 
 Return the `Dict` mapping all values to name symbols.
+
+This is *not* a method of of the function of the same name with methods defined on `Base.Enum`.
+Rather it is a function in the `BlockEnums` module.
 Perhaps this should not be advertized or exposed.
 """
 function namemap end
@@ -38,14 +49,15 @@ Get the index of the block of values `v` belongs to.
 """
 function blockindex end
 
-"""
-    setblocklength!(t::Type{<:BlockEnum}, block_length)
+# Apparently unused
+# """
+#     setblocklength!(t::Type{<:BlockEnum}, block_length)
 
-Set the length of each block in the partition of the values of `t`. This
-can only be called once.  In order to use the blocks you must first set up
-bookkeeping by calling `addblocks!`.  These blocks are called "active".
-"""
-function setblocklength! end
+# Set the length of each block in the partition of the values of `t`. This
+# can only be called once.  In order to use the blocks you must first set up
+# bookkeeping by calling `addblocks!`.  These blocks are called "active".
+# """
+# function setblocklength! end
 
 """
     numblocks(t::Type{<:BlockEnum{T}}) where T <: Integer
@@ -112,6 +124,7 @@ Return `x` bitcast to type `T`.
 val(x::BlockEnum{T}) where T = bitcast(T, x)
 
 (::Type{T})(x::BlockEnum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
+
 Base.cconvert(::Type{T}, x::BlockEnum{T2}) where {T<:Integer,T2<:Integer} = T(x)
 Base.write(io::IO, x::BlockEnum{T}) where {T<:Integer} = write(io, T(x))
 Base.read(io::IO, ::Type{T}) where {T<:BlockEnum} = T(read(io, basetype(T)))
@@ -120,6 +133,11 @@ Base.isless(x::T, y::T) where {T<:BlockEnum} = isless(basetype(T)(x), basetype(T
 
 Base.Symbol(x::BlockEnum)::Symbol = _symbol(x)
 
+"""
+    length(T::Type{<:BlockEnum})
+
+Return the number of instances of type `T`.
+"""
 Base.length(t::Type{<:BlockEnum}) = length(namemap(t))
 Base.typemin(t::Type{<:BlockEnum}) = minimum(keys(namemap(t)))
 Base.typemax(t::Type{<:BlockEnum}) = maximum(keys(namemap(t)))
@@ -146,14 +164,29 @@ function blockrange(t::Type{<:BlockEnum}, blockind)
     return start:stop
 end
 
-function inblock(el::BlockEnum, blockind)
-    return BlockEnums.val(el) in blockrange(typeof(el), blockind)
+"""
+    inblock(benum::BlockEnum, blockind)
+
+Return `true` if `benum` is in block number `blockind` of the type of `benum`.
+"""
+function inblock(benum::BlockEnum, blockind)
+    return BlockEnums.val(benum) in blockrange(typeof(benum), blockind)
 end
 
+"""
+    gtblock(benum::BlockEnum, blockind)
+
+Return `true` if `benum` is in a block number of the type of `benum` larger than `blockind`.
+"""
 function gtblock(el::BlockEnum, blockind)
     return BlockEnums.val(el) > last(blockrange(typeof(el), blockind))
 end
 
+"""
+    ltblock(benum::BlockEnum, blockind)
+
+Return `true` if `benum` is in a block number of the type of `benum` smaller than `blockind`.
+"""
 function ltblock(el::BlockEnum, blockind)
     return BlockEnums.val(el) < first(blockrange(typeof(el), blockind))
 end
@@ -260,14 +293,22 @@ function _parse_block_length(blen)
 end
 
 """
-    @blockenum BlockEnumName[::BaseType] value1[=x] value2[=y]
+    @blockenum EnumName[::BaseType] value1[=x] value2[=y]
+    @blockenum (EnumName[::BaseType], [keyword=val,...]) [value1, value2,...]
 
-Create an `BlockEnum{BaseType}` subtype with name `BlockEnumName` and enum member values of
+Create a `BlockEnum{BaseType}` subtype with name `EnumName` and enum member values of
 `value1` and `value2` with optional assigned values of `x` and `y`, respectively.
-`BlockEnumName` can be used just like other types and enum member values as regular values, such as
+
+### Keywords
+* `mod=Modname` -- `EnumName` and its instances will be namespaced in a module `Modname`, which will be created.
+* `blocklength=n` -- `n` is a literal `Int`. The common length of each "block" of enums.
+* `numblocks=m` -- `m` is a literal `Int`. The intial number of blocks to create.
+* `compactshow` -- a literal `Bool`.  If `true`, then do not print the equivalent `BaseType` value of instances.
+
+`EnumName` can be used just like other types and enum member values as regular values, such as
 
 # Examples
-```jldoctest fruitenum
+```julia
 julia> @blockenum Fruit apple=1 orange=2 kiwi=3
 
 julia> f(x::Fruit) = "I'm a Fruit with value: \$(Int(x))"
@@ -280,33 +321,56 @@ julia> Fruit(1)
 apple::Fruit = 1
 ```
 
+Add more instances like this
+```julia
+julia> @add Fruit banana lemon
+```
+
 Values can also be specified inside a `begin` block, e.g.
 
 ```julia
-@blockenum BlockEnumName begin
+@blockenum EnumName begin
     value1
     value2
 end
 ```
 
-`BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
+`BaseType`, which defaults to `Int32`, must be a primitive subtype of `Integer`.
 Member values can be converted between the enum type and `BaseType`. `read` and `write`
 perform these conversions automatically. In case the enum is created with a non-default
 `BaseType`, `Integer(value1)` will return the integer `value1` with the type `BaseType`.
 
 To list all the instances of an enum use `instances`, e.g.
 
-```jldoctest fruitenum
+```julia
 julia> instances(Fruit)
-(apple, orange, kiwi)
+(apple, orange, kiwi, banana, lemon)
 ```
 
 It is possible to construct a symbol from an enum instance:
 
-```jldoctest fruitenum
+```julia
 julia> Symbol(apple)
 :apple
 ```
+
+Examples of adding instances to blocks.
+```julia
+julia> using BlockEnums
+
+julia> @blockenum (Myenum, mod=MyenumMod, blocklength=100, numblocks=10, compactshow=false)
+
+julia> @addinblock Myenum 1 a b c
+c::Myenum = 3
+
+julia> @addinblock Myenum 3 x y z
+z::Myenum = 203
+
+julia> BlockEnums.blockindex(MyenumMod.y)
+3
+```
+
+See [`@add`](@ref), [`@addinblock`](@ref)
 """
 macro blockenum(T0::Union{Symbol,Expr}, syms...)
     local modname = :nothing # Default, do not create a new module. Use module that is in scope.
@@ -463,6 +527,12 @@ end
 
 _bind_var(mod, sym, instance) = mod.eval(:(const $sym = $instance; export $sym))
 
+"""
+    add!(enumname, syms...)
+
+Add symbols `syms` to `BlockEnum` `enumname`. This function is called by
+the macro [`@add`](@ref).
+"""
 function add!(a, syms...)
     nmap = BlockEnums.namemap(a)
     nextnum = length(a) == 0 ? 0 : maximum(keys(nmap)) + 1
@@ -492,11 +562,34 @@ function _get_qsyms(syms)
     return (QuoteNode(sym) for sym in syms if ! isa(sym, LineNumberNode))
 end
 
+"""
+    @add enunmame syms...
+
+Add symbols `syms` to [`BlockEnum`](@ref) named `enumname`.
+
+### Examples
+```julia
+@blockenum MyEnum
+@add MyEnum a b
+```
+```
+julia> a
+a::MyEnum = 0
+
+julia> b
+b::MyEnum = 1
+```
+"""
 macro add(a, syms...)
     qsyms = _get_qsyms(syms)
     :(BlockEnums.add!($(esc(a)), $(qsyms...)))
 end
 
+"""
+    add_in_block!(a, _block::Union{Integer, BlockEnum}, syms...)
+
+This is the function called by `@addinblock`.
+"""
 function add_in_block!(a, _block::Union{Integer, BlockEnum}, syms...)
     block = Int(_block)
     nmap = BlockEnums.namemap(a)
@@ -522,6 +615,11 @@ function add_in_block!(a, _block::Union{Integer, BlockEnum}, syms...)
     return na
 end
 
+"""
+    @addinblock EnumName blocknum sym1 [sym2,..]
+
+Add symbols `sym1`, `sym2`, etc. to block number `blocknum` of `BlockEnum` named `EnunName`.
+"""
 macro addinblock(a, block, syms...)
     qsyms = _get_qsyms(syms)
     :(BlockEnums.add_in_block!($(esc(a)), $(esc(block)), $(qsyms...)))
