@@ -1,5 +1,5 @@
 using BlockEnums
-using BlockEnums: blocklength, setblocklength!, numblocks, addblocks!, maxvalind, @addinblock,
+using BlockEnums: blocklength, numblocks, addblocks!, maxvalind, @addinblock,
     blockindex, blockrange, inblock, ltblock, gtblock, leblock, geblock
 using Test
 

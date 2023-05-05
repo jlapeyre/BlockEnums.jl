@@ -12,7 +12,7 @@ export BlockEnum, @blockenum, add!, @add, blocklength, getmodule, namemap,
     numblocks, addblocks!, add_in_block!, maxvalind, @addinblock,
     blockindex, basetype, blockrange, inblock, gtblock, geblock, ltblock, leblock
 
-export setblocklength!
+#export setblocklength!
 
 """
     namemap(::Type{<:BlockEnum})
