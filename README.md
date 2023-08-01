@@ -31,13 +31,12 @@ with `BlockEnums.jl`.
 The motivation for `Kind` is essentially the same as for `BlockEnums`:
 
 [Here](https://github.com/JuliaLang/JuliaSyntax.jl/blob/ad9b16681389dbe3f21a89897f7a86dec793f72a/src/kinds.jl#L927-L931)
-```julia
-`Kind` is a type tag for specifying the type of tokens and interior nodes of
+
+> `Kind` is a type tag for specifying the type of tokens and interior nodes of
 a syntax tree. Abstractly, this tag is used to define our own *sum types* for
 syntax tree nodes. We do this explicitly outside the Julia type system because
 (a) Julia doesn't have sum types and (b) we want concrete data structures which
 are unityped from the Julia compiler's point of view, for efficiency.
-```
 
 And [here](https://github.com/JuliaLang/JuliaSyntax.jl/blob/main/src/kinds.jl#L942-L944)
 ```julia
